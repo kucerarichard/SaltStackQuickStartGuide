@@ -1,4 +1,4 @@
-# SaltStack Quick Start Guide,  by Rich Kucera
+# SaltStack Quick Start Guide
 Quick Start Guide to SaltStack developed for Linux Academy for use on LA machines.  You need to modify for your machine naming patterns. 
 
 # INTRODUCTION
