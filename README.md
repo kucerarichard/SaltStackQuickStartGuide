@@ -1,5 +1,5 @@
 # SaltStack Quick Start Guide
-Quick Start Guide to SaltStack developed for Linux Academy for use on LA machines.  You need to modify for your machine naming patterns. 
+Quick Start Guide to SaltStack developed for Linux Academy for use on LA machines.  You need to modify for your machine naming patterns, and possibly the expect script depending on what state your machines are in right after being created (all with same temporary password for example). 
 
 # INTRODUCTION
 
