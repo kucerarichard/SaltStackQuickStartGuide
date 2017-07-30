@@ -13,9 +13,9 @@ Please start 3 new Centos7 lab machines(use machine #1, #2, and #3) and then,  o
 
 1) log in,  sudo su
 2) drop this script into machine #1 -- vim saltstack-init.sh and paste in the script.   Save it.
-3) Then chmod a+x saltstack-init.sh 
+3) Then `chmod a+x saltstack-init.sh `
 4) You should modify the SETPASSWD variable with your own password.  The complexity shown in the example password was enough to satisfy the ssh mechanism.  Remember that you have set the password on the machine #1 to this same complex password in order for the minion on machine #1 to install.  Avoid dollar signs,  the expect program cannot parse.
-5) Run the script with command: “./saltstack-init.sh expect” (you need to run the script on machine #1, which becomes the salt master).
+5) Run the script with command: `./saltstack-init.sh expect` (you need to run the script on machine #1, which becomes the salt master).
 6) Wait... It seems to hang after running the expect,  don't worry it's still working,  takes a while...
 
 ```bash
@@ -142,13 +142,13 @@ salt-ssh -i minion[123] state.sls minion
 ```
 
 After about 6 minutes you will have a Salt master on machine #1, and authenticated minions on machines 1-3.
-WHAT IS SALT
+# WHAT IS SALT
 For those who may have heard of SaltStack but are not yet familiar with it, SaltStack provides a very secure high speed godlike power for your bash shell and gives you access to a vast API normally reserved for more formal programming languages.
 https://docs.saltstack.com/en/2015.8/ref/modules/all/index.html
 It also gives you some very advanced ways to generate configuration through the use of templated constructs that can be thought of as your parameters populated at various times in the lifecycle of what salt terms “states” (similar to playbooks in Ansible, recipes in Chef). These states are executed by minions, which are powerful execution engines in their own right and can be invoked in bash without a master.
 
-HOW YOU CAN COMMAND, CONTROL AND ORCHESTRATE YOUR SYSTEMS WITH SALT
-Pillar Data
+# HOW YOU CAN COMMAND, CONTROL AND ORCHESTRATE YOUR SYSTEMS WITH SALT
+# Pillar Data
 In Orchestrating with Salt, you can take a data-driven approach–say you have this complex system made up of many hosts and types of servers. You can “surface” select attributes that you want controlled or parameterized in a salt construct called a “pillar”, this is a custom yaml-based model–it’s up to you to design and organize the ergonomics of the yaml and the attribute outline how best you see fit.
 For example, here is a pillar file that surfaces a bunch of attributes of interest from the configuration files of a JBoss cluster. This outline gets consumed by minions and builds clusters out of text file configuration, instead of special CLI, API or UI manipulation. JBoss still has very good support for regular file configuration, and text file configuration is SaltStack’s bread and butter(though there are dozens of APIs wrapped by Salt state and execution modules for you to use):
 
@@ -209,12 +209,12 @@ It is possible to add dynamic code in pillars. Here is an example of looping ins
 ```
 
 Minions receive from the master whatever pillar data they are entitled to see, based on their role, or name, ip, or any other of the numerous selectors(glob, regex, simple list) that salt can use to target minions.
-The Bus
+# The Bus
 Salt has a high-speed event bus, by default 0mq. SaltStack built an alternative transport called RAET (kind of a python riff on JGroups, the reliable UDP broadcast implementation for Java servers). But now for alternative transport they are advocating and developing Tornado instead, a python-based event-driven web server/communication framework.
 To this bus are attached two features that allow you to simply access the bus–beacons (on the minions) and reactors (on the master). Beacons monitor for things (like using inotify functions for example) and send events when something happens. On the master reactors pick up those events and respond with whatever actions or orchestrated coordination needs to happen for that event.
 In the lab in the next guide, we will run a salt command to watch the event bus, mainly to figure out what the tags are that go with beacon events, so we can write matching reactors to the events.
 
-WHAT TO DO WHEN THE SCRIPT FINISHES (about 6 minutes)
+# WHAT TO DO WHEN THE SCRIPT FINISHES (about 6 minutes)
 Test salt: in machine #1 type the following:
 
 `salt '*' test.ping`
@@ -247,7 +247,7 @@ You may want to set root password on all your machines:
 
 `salt '*' shadow.set_password root '$6$HopHHRQy$jclaXVI4unhM.....'`
 
-WHAT IS IN THE INIT SCRIPT
+# WHAT IS IN THE INIT SCRIPT
 The script uses Expect to get into your machines to change the password.
 
 ```bash
@@ -339,20 +339,22 @@ rm -f /etc/salt/pki/minion/minion_master.pub
 
 This is done in the case of multiple reinstalls (without expect), it just wipes out the public key of the master stored on the minion so that it gets re-exchanged. If you ever move master you have to do this.
 
-THE END
+# THE END
 I hope you had success with this guide and continue to delve into SaltStack.   See you in the next guide!  
 
-SOURCES / RESOURCES
+# SOURCES / RESOURCES
 
 
-General
+## General
+
 https://docs.saltstack.com/en/latest/
 https://github.com/hbokh/awesome-saltstack
 http://www.yet.org/2016/09/salt/
 https://arnoldbechtoldt.com/blog/saltstack-current-challenges
 http://www.saltstat.es/
 
-Resources for the saltstack-init.sh script
+## Resources for the saltstack-init.sh script
+
 http://stackoverflow.com/questions/15432275/running-command-with-expect
 http://stackoverflow.com/questions/2823007/ssh-login-with-expect1-how-to-exit-expect-and-remain-in-ssh
 http://bencane.com/2016/07/19/using-salt-ssh-to-install-salt/
