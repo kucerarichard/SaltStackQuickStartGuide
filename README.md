@@ -1,5 +1,5 @@
 # SaltStack Quick Start Guide
-Quick Start Guide to SaltStack developed for Linux Academy for use on LA machines.  You need to modify for your machine naming patterns, and possibly the expect script depending on what state your machines are in right after being created (all with same temporary password for example). 
+Quick Start Guide to SaltStack developed for use on Linux machines.  You need to modify for your machine naming patterns, and possibly the expect script depending on what state your machines are in right after being created (all with same temporary password for example). 
 
 # INTRODUCTION
 
@@ -375,3 +375,210 @@ http://stackoverflow.com/questions/3323809/trim-last-3-characters-of-a-line-with
 https://stedolan.github.io/jq/
 https://stedolan.github.io/jq/manual/
 https://jqplay.org/
+
+# ORCHESTRATION LAB
+
+This is a simple orchestration lab. Related resources and notes are collected at the end of the guide.
+
+Let’s configure and orchestrate rsyslog and learn about the following:
+
+Jinja templates
+Jinja macros
+Minion Beacons
+Master Reactors
+
+You should have lab machines #1 (master), #2 (minion), and #3 (minion) setup with salt. 
+
+## Objective
+
+On each minion, create a file, /tmp/salt-notes.txt, and use SaltStack to monitor any changes to that file. When the file is modified, push the last line in the file, on only that minion, to the rsyslog service on master, where it should be filtered into a special log file /var/log/notes/handy-salt.log.
+
+# GETTING STARTED
+
+
+## Setup
+
+All of the source files below are placed in the master(machine #1) salt filesystem /srv/salt.
+Place the following library in /srv/salt/lib/loggerlib.sls
+
+```
+{% macro loggerbundle(path2logfile,tag) -%}
+/opt/logger.local/{{ tag }}-logger.sh:
+    file.managed:
+        - makedirs: True
+        - source: salt://files/rsyslog/logger.sh.jinja
+        - user: root
+        - group: root
+        - mode: 755
+        - template: jinja
+        - defaults:
+              path2logfile: {{ path2logfile }}
+              tag: {{ tag }}
+{%- endmacro %}
+
+Place the following 3 files in a template directory for rsyslog
+/srv/salt/files/rsyslog:
+
+rsyslog-listener.conf.jinja
+$ModLoad imudp
+$UDPServerRun 514
+logsplitter.conf.jinja
+if $syslogtag contains 'handy-salt' then /var/log/notes/handy-salt.log
+logger.sh.jinja
+{% set masterip = salt['cmd.run']('grep salt /etc/hosts | awk "{ print \$1; }"') -%}
+/usr/bin/tail -1 {{ path2logfile }} | /usr/bin/logger -n {{ masterip }} -P 514 -t {{ tag }} 
+
+Place the following state in /srv/salt/notelog.sls
+{% from 'lib/loggerlib.sls' import loggerbundle with context %}
+{{ loggerbundle('/tmp/salt-notes.txt','handy-salt') }}
+
+/tmp/salt-notes.txt:
+   file.touch
+
+Place the following beacon in /srv/salt/files/minion.d/beacon.conf.jinja
+beacons:
+  inotify:
+     /tmp/salt-notes.txt:
+        mask:
+          - modify
+     disable_during_state_run: True
+
+Add these 2 state files to /srv/salt:
+1) rsyslog.sls
+/etc/rsyslog.d/rsyslog-splitter.conf:
+  file.managed:
+    - source: salt://files/rsyslog/logsplitter.conf.jinja
+    - template: jinja
+
+/etc/rsyslog.d/rsyslog-listener.conf:
+  file.managed:
+    - source: salt://files/rsyslog/rsyslog-listener.conf.jinja
+    - template: jinja
+2) beacons.sls
+/etc/salt/minion.d/beacon.conf:
+  file.managed:
+    - source: salt://files/minion.d/beacon.conf.jinja
+    - template: jinja
+    - makedirs: True
+```
+
+Beacons are a way to make the salt event bus available through simple configuration to translate system events into salt events, which can be reacted to by the Salt master in Reactors. Minions are instrumented with beacon modules, there are a lot these days:
+
+https://docs.saltstack.com/en/latest/ref/beacons/all/index.html
+
+
+## Let’s run this stuff
+
+1) Apply the rsyslog state to master (your machine #1)
+`salt yourusername1.* state.sls rsyslog`
+
+2) Apply the notelog state to all
+`salt \* state.sls notelog`
+
+3) Restart rsyslog
+- confirm it’s there 
+`salt \* service.get_all | grep rsyslog `
+- restart it 
+`salt \* service.restart rsyslog`
+
+4) Test the notelog
+`salt \* cmd.run 'echo 56789 >> /tmp/salt-notes.txt'`
+`salt \* cmd.run /opt/logger.local/handy-salt-logger.sh`
+`tail /var/log/notes/handy-salt.log`
+
+5) Deploy the beacon, and restart minions to pick up the beacon (use salt-ssh because the minion can’t restart itself without failing to return something from the operation, so there is a timeout)
+`salt \* state.sls beacons`
+`salt-ssh minion[123] service.restart salt-minion`
+
+6) Configure the reactor quick and dirty  :)  You need to watch the event bus to figure out what the tags are.  
+On master:
+`salt-run state.event pretty=true`
+If you modify the salt-notes.txt file,  the event bus will show that you need something that looks like this:
+‘salt/beacon/username2.mylabserver.com/inotify//tmp/salt-notes.txt’
+You just need a few more files to tie together individual minions to their individual reactors – run this quick and dirty script to generate reactor configuration and sls files directly into the master configuration.  See how the alternative format --out=text on the salt command simplifies the output to make it easier to grab a list of available minions. Crude but effective.
+
+generate-reactor-code.sh:
+```bash
+#!/bin/bash
+#
+# Quick and dirty script to generate reactor conf and state files
+# Run this on master.
+# Reactor SLS is a little different.  See
+# https://docs.saltstack.com/en/getstarted/event/reactor.html
+#
+echo "reactor:" > /etc/salt/master.d/reactor.conf
+for i in `salt \* test.ping --out=text | awk '{ print $1; }' | sed -e 's/.$//'`
+do
+cat << REACT01 >> /etc/salt/master.d/reactor.conf
+  - 'salt/beacon/${i}/inotify//tmp/salt-notes.txt':
+    - salt://reactor-${i}.sls
+REACT01
+cat << REACT02 > /srv/salt/reactor-${i}.sls
+send ${i} note to syslog:
+  local.cmd.run:
+    - tgt: '${i}'
+    - arg:
+      - /opt/logger.local/handy-salt-logger.sh
+REACT02
+done
+```
+
+7) Test the reactor config.  Restart master in debug  just to make sure it parses the new file. It should show no errors. Verify, ^C to stop the debug master, then restart the service.
+
+`systemctl stop salt-master`
+`salt-master -l debug`
+...
+`^C`
+`systemctl start salt-master`
+8) Finally
+Pick one of the minions and either edit or echo >> some text at the bottom of /tmp/salt-notes.txt
+On master check the log file /var/log/notes/handy-salt.log, you should see your text logged.
+vi will generate two events for inotify modify, so you will see duplicate log entries
+echo >> generates only one event for inotify modify
+If you want to see the beacon/reactor in action, start both the master and a minion in debug mode (-l debug) in two separate terminals. On a third terminal on master listen to the event log(step 6 above). Then use a fourth terminal to log into the minon and edit the /tmp/salt-notes.txt file.
+
+# THE END
+There are many more aspects to SaltStack not covered here, such as requisites, salt-cloud, the actual orchestrate runner, etc. that might be covered on future posts.   I hope you had success with this guide and continue to delve into SaltStack.
+SOURCES / RESOURCES
+
+
+Debugging and Tweaking the Install
+IRC
+http://irclog.perlgeek.de/salt/ (archives)
+http://webchat.freenode.net/?channels=salt (join chat)
+This guide was almost derailed by an inoperable beacon system. Fortunately because we have IRC logs for Salt it only cost me a couple hours sleep.
+Shutting down the salt-minion and starting in debug is easy enough:
+
+`systemctl stop salt-minion`
+`salt-minion -l debug`
+What this revealed is a failure to load the beacon file.
+See this IRC log for relevant conversation, ending with the fact that if you pip install the dependency the problem is fixed:
+https://irclog.perlgeek.de/salt/2016-04-06#i_12297672
+
+pip install pyinotify
+
+You’ll see that this line has been added to the minion installer in saltstack-init.sh in the SaltStack Quick Start Guide.
+There are other options, such as specifying which version that bootstrap-salt.sh should load, thereby avoiding the newer dependency. What likely happened is that features were added to the inotify part of the beacon system, creating a requirement for pyinotify update and the Centos 7 yum repo was no longer adequate to run it. If you know package systems and python well, you could possibly update your yum repos to load an updated pyinotify. Fortunately the alternative package system for python pip delivered what was required.
+
+https://pypi.python.org/pypi/pyinotify
+https://docs.saltstack.com/en/latest/ref/beacons/all/salt.beacons.inotify.html
+depends:    pyinotify Python module >= 0.9.5
+
+Beacon/Reactor documentation is online:
+https://docs.saltstack.com/en/latest/topics/reactor/
+https://docs.saltstack.com/en/latest/topics/event/index.html
+https://docs.saltstack.com/en/latest/topics/beacons/index.html
+https://docs.saltstack.com/en/getstarted/event/reactor.html
+Advanced orchestration 
+https://github.com/kucerarichard/SaltedJBoss
+
+Resources for rsyslog
+http://download.rsyslog.com/design.pdf
+https://media.readthedocs.org/pdf/rsyslog/latest/rsyslog.pdf
+http://unix.stackexchange.com/questions/128156/remote-syslog-command-line-client
+http://www.rsyslog.com/sending-messages-to-a-remote-syslog-server/
+http://kwlug.org/sites/kwlug.org/files/2009-08-10-syslog-servers.pdf
+http://lists.adiscon.net/pipermail/rsyslog/2013-August/033421.html
+
+https://docs.saltstack.com/en/latest/topics/beacons/index.html
+
