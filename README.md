@@ -4,7 +4,7 @@ Quick Start Guide to SaltStack developed for use on Linux machines.  You need to
 # INTRODUCTION
 
 
-This guide provides a script and instructs you on how to launch a really cool SaltStack configuration on three of your Linux Academy lab machines.  The followup guides will contain simple orchestration labs,  some examples working with MySQL salt modules.   Related resources and notes are collected at the end of each guide.   
+This guide provides a script and instructs you on how to launch a small SaltStack configuration on three of your Linux Academy lab machines.  The followup guides will contain simple orchestration labs,  some examples working with MySQL salt modules.   Related resources and notes are collected at the end of each guide.   
 
 # GETTING STARTED
 
